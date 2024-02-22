@@ -580,8 +580,7 @@ def maximum(x1, x2):
 
 
 def median(x, axis=None, keepdims=False):
-    # TODO: Maybe implement via sort?
-    raise NotImplementedError("The MLX backend doesn't support median yet")
+    return quantile(x, 0.5, axis=axis, keepdims=keepdims)
 
 
 def meshgrid(*x, indexing="xy"):
