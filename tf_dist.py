@@ -4,7 +4,7 @@ import keras
 
 keras.utils.set_random_seed(0)
 
-n_replicas = 1
+n_replicas = 2
 
 gpus = tf.config.list_physical_devices("GPU")
 tf.config.set_logical_device_configuration(
