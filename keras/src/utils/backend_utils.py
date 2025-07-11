@@ -130,8 +130,9 @@ def set_backend(backend):
     import keras
 
     # Update the global _BACKEND variable in the config module
-    if "keras.src.backend.config" in sys.modules:
-        sys.modules["keras.src.backend.config"]._BACKEND = backend
+    from keras.src.backend import config
+
+    config._BACKEND = backend
 
     # Finally: refresh all imported Keras submodules.
     globs = copy.copy(globals())
