@@ -6395,7 +6395,7 @@ def _nanmedian(x, axis=None, keepdims=False):
     x = backend.ops.convert_to_tensor(x)
     if axis == () or axis == []:
         return backend.ops.cast(x, dtypes.result_type(x.dtype, float))
-    return backend.ops.numpy.nanquantile(x, 0.5, axis=axis, keepdims=keepdims)
+    return _nanquantile(x, 0.5, axis=axis, keepdims=keepdims)
 
 
 class Nanmin(Operation):
@@ -6647,7 +6647,7 @@ class Nanquantile(Operation):
         self.keepdims = keepdims
 
     def call(self, x, q):
-        return backend.ops.numpy.nanquantile(
+        return _nanquantile(
             x, q, axis=self.axis, method=self.method, keepdims=self.keepdims
         )
 
@@ -6719,9 +6719,91 @@ def nanquantile(x, q, axis=None, method="linear", keepdims=False):
             axis=axis, method=method, keepdims=keepdims
         ).symbolic_call(x, q)
 
-    return backend.ops.numpy.nanquantile(
-        x, q, axis=axis, method=method, keepdims=keepdims
+    return _nanquantile(x, q, axis=axis, method=method, keepdims=keepdims)
+
+
+def _nanquantile(x, q, axis=None, method="linear", keepdims=False):
+    if not config._use_backend_agnostic_ops() and hasattr(
+        backend.ops.numpy, "nanquantile"
+    ):
+        return backend.ops.numpy.nanquantile(
+            x, q, axis=axis, method=method, keepdims=keepdims
+        )
+    if method not in ("linear", "lower", "higher", "midpoint", "nearest"):
+        raise ValueError(
+            "`method` must be one of 'linear', 'lower', 'higher', 'midpoint' "
+            f"or 'nearest'. Received: method={method}"
+        )
+    x = backend.ops.convert_to_tensor(x)
+    if not backend.is_float_dtype(x.dtype):
+        return backend.ops.numpy.quantile(
+            x, q, axis=axis, method=method, keepdims=keepdims
+        )
+    dtype = dtypes.result_type(x.dtype, float)
+    compute_dtype = dtypes.result_type(dtype, "float32")
+    x = backend.ops.cast(x, compute_dtype)
+    q = backend.ops.convert_to_tensor(q, dtype=compute_dtype)
+    output_shape = list(q.shape) + list(
+        reduce_shape(x.shape, axis=axis, keepdims=keepdims)
     )
+    if axis is None:
+        y = backend.ops.numpy.reshape(x, [-1])
+    else:
+        axis = canonicalize_axes(to_tuple_or_list(axis), len(x.shape))
+        k = len(axis)
+        y = backend.ops.numpy.moveaxis(x, axis, list(range(-k, 0)))
+        y = backend.ops.numpy.reshape(
+            y, list(y.shape[: len(y.shape) - k]) + [-1]
+        )
+
+    # Replace NaNs with +inf so that sorting moves them past valid values.
+    nan_mask = backend.ops.numpy.isnan(y)
+    y = backend.ops.numpy.sort(
+        backend.ops.numpy.where(nan_mask, float("inf"), y), axis=-1
+    )
+    n = backend.ops.numpy.sum(
+        backend.ops.cast(
+            backend.ops.numpy.logical_not(nan_mask), compute_dtype
+        ),
+        axis=-1,
+        keepdims=True,
+    )
+    pos = backend.ops.numpy.multiply(
+        backend.ops.numpy.maximum(backend.ops.numpy.subtract(n, 1.0), 0.0),
+        backend.ops.numpy.reshape(q, [-1]),
+    )
+    lo_idx = backend.ops.numpy.floor(pos)
+    hi_idx = backend.ops.numpy.ceil(pos)
+    if method == "linear":
+        t = backend.ops.numpy.subtract(pos, lo_idx)
+    elif method == "lower":
+        t = 0.0
+    elif method == "higher":
+        t = backend.ops.numpy.subtract(hi_idx, lo_idx)
+    elif method == "midpoint":
+        t = 0.5
+    else:  # nearest
+        t = backend.ops.numpy.subtract(backend.ops.numpy.round(pos), lo_idx)
+    lo = backend.ops.numpy.take_along_axis(
+        y, backend.ops.cast(lo_idx, "int32"), axis=-1
+    )
+    hi = backend.ops.numpy.take_along_axis(
+        y, backend.ops.cast(hi_idx, "int32"), axis=-1
+    )
+    result = backend.ops.numpy.add(
+        lo,
+        backend.ops.numpy.multiply(
+            backend.ops.numpy.subtract(hi, lo),
+            backend.ops.cast(t, compute_dtype),
+        ),
+    )
+
+    result = backend.ops.numpy.where(
+        backend.ops.numpy.equal(n, 0.0), float("nan"), result
+    )
+    result = backend.ops.numpy.moveaxis(result, -1, 0)
+    result = backend.ops.numpy.reshape(result, output_shape)
+    return backend.ops.cast(result, dtype)
 
 
 class Nanstd(Operation):
