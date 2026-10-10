@@ -6743,28 +6743,30 @@ def _nanquantile(x, q, axis=None, method="linear", keepdims=False):
     compute_dtype = dtypes.result_type(dtype, "float32")
     x = backend.ops.cast(x, compute_dtype)
     q = backend.ops.convert_to_tensor(q, dtype=compute_dtype)
-    output_shape = list(backend.ops.shape(q)) + list(
-        reduce_shape(backend.ops.shape(x), axis=axis, keepdims=keepdims)
-    )
+    x_shape = backend.ops.shape(x)
+    q_shape = backend.ops.shape(q)
     if axis is None:
         y = backend.ops.numpy.reshape(x, [-1])
     else:
-        axis = canonicalize_axes(to_tuple_or_list(axis), len(x.shape))
-        k = len(axis)
-        y = backend.ops.numpy.moveaxis(x, axis, list(range(-k, 0)))
-        y = backend.ops.numpy.reshape(y, list(backend.ops.shape(y)[:-k]) + [-1])
+        axis = canonicalize_axes(axis, len(x_shape))
+        y = backend.ops.numpy.moveaxis(x, axis, list(range(-len(axis), 0)))
+        y = backend.ops.numpy.reshape(
+            y, list(reduce_shape(x_shape, axis=axis, keepdims=False)) + [-1]
+        )
+    output_shape = list(q_shape) + list(
+        reduce_shape(x_shape, axis=axis, keepdims=keepdims)
+    )
 
     # Replace NaNs with +inf so that sorting moves them past valid values.
     nan_mask = backend.ops.numpy.isnan(y)
     y = backend.ops.numpy.sort(
         backend.ops.numpy.where(nan_mask, float("inf"), y), axis=-1
     )
-    n = backend.ops.numpy.sum(
-        backend.ops.cast(
-            backend.ops.numpy.logical_not(nan_mask), compute_dtype
+    n = backend.ops.cast(
+        backend.ops.numpy.sum(
+            backend.ops.numpy.logical_not(nan_mask), axis=-1, keepdims=True
         ),
-        axis=-1,
-        keepdims=True,
+        compute_dtype,
     )
     pos = backend.ops.numpy.multiply(
         backend.ops.numpy.maximum(backend.ops.numpy.subtract(n, 1.0), 0.0),
@@ -6775,7 +6777,7 @@ def _nanquantile(x, q, axis=None, method="linear", keepdims=False):
             idx = backend.ops.numpy.floor(pos)
         elif method == "higher":
             idx = backend.ops.numpy.ceil(pos)
-        else:  # "nearest"
+        else:  # nearest
             idx = backend.ops.numpy.round(pos)
         result = backend.ops.numpy.take_along_axis(
             y, backend.ops.cast(idx, "int32"), axis=-1
@@ -6793,13 +6795,12 @@ def _nanquantile(x, q, axis=None, method="linear", keepdims=False):
             result = backend.ops.numpy.multiply(
                 backend.ops.numpy.add(lo, hi), 0.5
             )
-        else:  # "linear"
+        else:  # linear
             t = backend.ops.numpy.subtract(pos, lo_idx)
             result = backend.ops.numpy.add(
                 lo,
                 backend.ops.numpy.multiply(
-                    backend.ops.numpy.subtract(hi, lo),
-                    t,
+                    backend.ops.numpy.subtract(hi, lo), t
                 ),
             )
 
