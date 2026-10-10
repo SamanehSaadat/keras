@@ -6743,8 +6743,8 @@ def _nanquantile(x, q, axis=None, method="linear", keepdims=False):
     compute_dtype = dtypes.result_type(dtype, "float32")
     x = backend.ops.cast(x, compute_dtype)
     q = backend.ops.convert_to_tensor(q, dtype=compute_dtype)
-    output_shape = list(q.shape) + list(
-        reduce_shape(x.shape, axis=axis, keepdims=keepdims)
+    output_shape = list(backend.ops.shape(q)) + list(
+        reduce_shape(backend.ops.shape(x), axis=axis, keepdims=keepdims)
     )
     if axis is None:
         y = backend.ops.numpy.reshape(x, [-1])
@@ -6752,9 +6752,7 @@ def _nanquantile(x, q, axis=None, method="linear", keepdims=False):
         axis = canonicalize_axes(to_tuple_or_list(axis), len(x.shape))
         k = len(axis)
         y = backend.ops.numpy.moveaxis(x, axis, list(range(-k, 0)))
-        y = backend.ops.numpy.reshape(
-            y, list(y.shape[: len(y.shape) - k]) + [-1]
-        )
+        y = backend.ops.numpy.reshape(y, list(backend.ops.shape(y)[:-k]) + [-1])
 
     # Replace NaNs with +inf so that sorting moves them past valid values.
     nan_mask = backend.ops.numpy.isnan(y)
@@ -6772,31 +6770,38 @@ def _nanquantile(x, q, axis=None, method="linear", keepdims=False):
         backend.ops.numpy.maximum(backend.ops.numpy.subtract(n, 1.0), 0.0),
         backend.ops.numpy.reshape(q, [-1]),
     )
-    lo_idx = backend.ops.numpy.floor(pos)
-    hi_idx = backend.ops.numpy.ceil(pos)
-    if method == "linear":
-        t = backend.ops.numpy.subtract(pos, lo_idx)
-    elif method == "lower":
-        t = 0.0
-    elif method == "higher":
-        t = backend.ops.numpy.subtract(hi_idx, lo_idx)
-    elif method == "midpoint":
-        t = 0.5
-    else:  # nearest
-        t = backend.ops.numpy.subtract(backend.ops.numpy.round(pos), lo_idx)
-    lo = backend.ops.numpy.take_along_axis(
-        y, backend.ops.cast(lo_idx, "int32"), axis=-1
-    )
-    hi = backend.ops.numpy.take_along_axis(
-        y, backend.ops.cast(hi_idx, "int32"), axis=-1
-    )
-    result = backend.ops.numpy.add(
-        lo,
-        backend.ops.numpy.multiply(
-            backend.ops.numpy.subtract(hi, lo),
-            backend.ops.cast(t, compute_dtype),
-        ),
-    )
+    if method in ("lower", "higher", "nearest"):
+        if method == "lower":
+            idx = backend.ops.numpy.floor(pos)
+        elif method == "higher":
+            idx = backend.ops.numpy.ceil(pos)
+        else:  # "nearest"
+            idx = backend.ops.numpy.round(pos)
+        result = backend.ops.numpy.take_along_axis(
+            y, backend.ops.cast(idx, "int32"), axis=-1
+        )
+    else:
+        lo_idx = backend.ops.numpy.floor(pos)
+        hi_idx = backend.ops.numpy.ceil(pos)
+        lo = backend.ops.numpy.take_along_axis(
+            y, backend.ops.cast(lo_idx, "int32"), axis=-1
+        )
+        hi = backend.ops.numpy.take_along_axis(
+            y, backend.ops.cast(hi_idx, "int32"), axis=-1
+        )
+        if method == "midpoint":
+            result = backend.ops.numpy.multiply(
+                backend.ops.numpy.add(lo, hi), 0.5
+            )
+        else:  # "linear"
+            t = backend.ops.numpy.subtract(pos, lo_idx)
+            result = backend.ops.numpy.add(
+                lo,
+                backend.ops.numpy.multiply(
+                    backend.ops.numpy.subtract(hi, lo),
+                    t,
+                ),
+            )
 
     result = backend.ops.numpy.where(
         backend.ops.numpy.equal(n, 0.0), float("nan"), result
