@@ -32,8 +32,13 @@ from keras.src import tree
 from keras.src import utils
 from keras.src.api_export import keras_export
 from keras.src.backend import KerasTensor
+from keras.src.backend.common import AutocastScope
+from keras.src.backend.common import get_autocast_scope
 from keras.src.backend.common import global_state
+from keras.src.backend.common import is_float_dtype
 from keras.src.backend.common import remat
+from keras.src.backend.common import standardize_dtype
+from keras.src.backend.common import standardize_shape
 from keras.src.backend.common.keras_tensor import any_symbolic_tensors
 from keras.src.backend.common.name_scope import current_path
 from keras.src.backend.common.remat import get_current_remat_mode
@@ -607,7 +612,7 @@ class Layer(BackendLayer, Operation):
         if shape is None:
             shape = ()
         if dtype is not None:
-            dtype = backend.standardize_dtype(dtype)
+            dtype = standardize_dtype(dtype)
         else:
             dtype = self.variable_dtype
         if initializer is None:
@@ -929,7 +934,7 @@ class Layer(BackendLayer, Operation):
             kwargs_may_need_convert
             or len(args) != 1
             or not is_backend_tensor_or_symbolic(args[0], allow_none=False)
-            or backend.standardize_dtype(args[0].dtype) != self.input_dtype
+            or standardize_dtype(args[0].dtype) != self.input_dtype
         ) and self._convert_input_args:
             args = tree.map_structure(maybe_convert, args)
             kwargs = tree.map_structure(maybe_convert, kwargs)
@@ -1017,21 +1022,21 @@ class Layer(BackendLayer, Operation):
         # 7. Call the layer.
         try:
             with self._open_name_scope():
-                current_scope = backend.get_autocast_scope()
+                current_scope = get_autocast_scope()
                 new_scope = None
                 if current_scope is not None:
                     # Clear or update the current scope if necessary.
                     if not self.autocast:
-                        new_scope = backend.AutocastScope(None)
-                    elif not backend.is_float_dtype(self.compute_dtype):
+                        new_scope = AutocastScope(None)
+                    elif not is_float_dtype(self.compute_dtype):
                         # Some preprocessing layers might have a non-float
                         # dtype, we should not autocast in this case.
-                        new_scope = backend.AutocastScope(None)
+                        new_scope = AutocastScope(None)
                     elif current_scope.dtype != self.compute_dtype:
-                        new_scope = backend.AutocastScope(self.compute_dtype)
+                        new_scope = AutocastScope(self.compute_dtype)
                 elif self.compute_dtype != self.variable_dtype:
                     # Enter a new scope if our dtypes are "mixed".
-                    new_scope = backend.AutocastScope(self.compute_dtype)
+                    new_scope = AutocastScope(self.compute_dtype)
                 if new_scope is not None:
                     with new_scope:
                         outputs = super().__call__(*args, **kwargs)
@@ -1227,19 +1232,7 @@ class Layer(BackendLayer, Operation):
             with backend.StatelessScope(
                 state_mapping=mapping, collect_losses=return_losses
             ) as scope:
-                if self.quantization_mode is not None:
-                    if self._remat_mode is not None:
-                        outputs = self.rematerialized_call(
-                            self.quantized_call, *args, **kwargs
-                        )(*args, **kwargs)
-                    else:
-                        outputs = self.quantized_call(*args, **kwargs)
-                elif self._remat_mode is not None:
-                    outputs = self.rematerialized_call(
-                        self.call, *args, **kwargs
-                    )(*args, **kwargs)
-                else:
-                    outputs = self.call(*args, **kwargs)
+                outputs = self._dispatch_call(*args, **kwargs)
                 if return_losses:
                     losses = self.losses
         finally:
@@ -1439,6 +1432,18 @@ class Layer(BackendLayer, Operation):
                 "quantization."
             )
 
+    def _check_quantized_build_attributes(self, geometry):
+        """Raises if `build()` did not set an attribute `geometry` reads."""
+        missing = [a for a in geometry.build_attributes if not hasattr(self, a)]
+        if missing:
+            raise ValueError(
+                f"Layer '{self.name}' (of type '{type(self).__name__}') "
+                f"cannot be quantized: its `build()` did not set "
+                f"{', '.join(missing)}. "
+                "A subclass that overrides `build()` must call "
+                "`super().build()`."
+            )
+
     def quantized_build(self, input_shape, mode, config=None):
         strategy = strategy_registry.get_strategy(mode)
         if strategy is None or not self._supports_quantization_mode(strategy):
@@ -1485,15 +1490,7 @@ class Layer(BackendLayer, Operation):
         strategy = strategy_registry.get_strategy(mode)
         if strategy is None or not self._supports_quantization_mode(strategy):
             raise self._quantization_mode_error(mode)
-        missing = [a for a in geometry.build_attributes if not hasattr(self, a)]
-        if missing:
-            raise ValueError(
-                f"Layer '{self.name}' (of type '{type(self).__name__}') "
-                f"cannot be quantized: its `build()` did not set "
-                f"{', '.join(missing)}. "
-                "A subclass that overrides `build()` must call "
-                "`super().build()`."
-            )
+        self._check_quantized_build_attributes(geometry)
         strategy.check_quantizable(self)
         if self.lora_enabled:
             self._check_lora_supported(mode)
@@ -2258,7 +2255,7 @@ def get_shapes_dict(call_spec):
     """
 
     def standardize_shape_or_none(x):
-        return None if x is None else backend.standardize_shape(x.shape)
+        return None if x is None else standardize_shape(x.shape)
 
     shapes_dict = {}
     for k, v in call_spec.tensor_arguments_dict.items():
