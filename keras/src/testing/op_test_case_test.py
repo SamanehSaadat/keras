@@ -180,9 +180,6 @@ class OpTestTest(testing.TestCase):
             self.assertFalse(cls.__test__)
         self.assertTrue(SquareTest.__test__)
 
-    def test_op_test_marker(self):
-        self.assertEqual([m.name for m in SquareTest.pytestmark], ["op_test"])
-
     def test_override_by_name(self):
         class Case(SquareTest):
             def test_input_dtypes_int8(self):

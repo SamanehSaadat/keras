@@ -3,7 +3,6 @@ import itertools
 
 import ml_dtypes
 import numpy as np
-import pytest
 from absl.testing import parameterized
 
 from keras.src import backend
@@ -151,7 +150,6 @@ class OpTest(TestCase):
     """
 
     __test__ = False  # Not collected by pytest; subclasses that set `op` are.
-    pytestmark = [pytest.mark.op_test]
     op = None
     op_class = None
     reference_fn = None

@@ -13,6 +13,7 @@ import pytest  # noqa: E402
 from keras.src.backend import SUPPORTS_GRADIENT  # noqa: E402
 from keras.src.backend.config import backend  # noqa: E402
 from keras.src.backend.config import backend_is_pluggable
+from keras.src.testing import OpTest
 from keras.src.utils import module_utils
 from keras.src.utils.module_utils import get_pluggable_backend_module
 
@@ -100,6 +101,9 @@ def pytest_collection_modifyitems(config, items):
     is_xdist_worker = "PYTEST_XDIST_WORKER" in os.environ
 
     for item in items:
+        cls = getattr(item, "cls", None)
+        if cls and issubclass(cls, OpTest):
+            item.add_marker(pytest.mark.op_test)
         if "requires_trainable_backend" in item.keywords:
             item.add_marker(requires_trainable_backend)
         if requires_multiple_devices and "multi_device" in item.keywords:
