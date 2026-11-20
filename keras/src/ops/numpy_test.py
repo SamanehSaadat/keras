@@ -4669,6 +4669,11 @@ class NumpyTwoInputOpsCorrectnessTest(testing.TestCase):
         stop = np.array(1.4, dtype="float32")
         self.assertAllEqual(knp.linspace(start, stop, 3)[-1], stop)
 
+        stop = np.ones([2, 4], dtype="float32")
+        self.assertAllClose(
+            knp.linspace(0.0, stop, 4), np.linspace(0.0, stop, 4)
+        )
+
     def test_logical_and(self):
         x = np.array([[True, False], [True, True]])
         y = np.array([[False, False], [True, False]])
@@ -4742,6 +4747,11 @@ class NumpyTwoInputOpsCorrectnessTest(testing.TestCase):
         stop = np.array(1.4, dtype="float32")
         self.assertAllEqual(
             knp.logspace(start, stop, 3)[-1], np.power(10, stop)
+        )
+
+        stop = np.ones([2, 4], dtype="float32")
+        self.assertAllClose(
+            knp.logspace(0.0, stop, 4), np.logspace(0.0, stop, 4)
         )
 
     def test_maximum(self):

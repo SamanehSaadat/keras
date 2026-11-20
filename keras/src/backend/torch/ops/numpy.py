@@ -1307,14 +1307,14 @@ def linspace(
             step = (stop - start) / num
         if num > 1:
             stop = stop - ((stop - start) / num)
-    if hasattr(start, "__len__") and hasattr(stop, "__len__"):
+    if hasattr(start, "__len__") or hasattr(stop, "__len__"):
         start = convert_to_tensor(start, dtype=dtype)
         stop = convert_to_tensor(stop, dtype=dtype)
         steps = torch.arange(num, dtype=dtype, device=get_device())
         steps = steps / builtins.max(num - 1, 1)
 
         # reshape `steps` to allow for broadcasting
-        for i in range(start.ndim):
+        for i in range(builtins.max(start.ndim, stop.ndim)):
             steps = steps.unsqueeze(-1)
 
         # increments from `start` to `stop` in each dimension
@@ -1406,14 +1406,14 @@ def logspace(start, stop, num=50, endpoint=True, base=10, dtype=None, axis=0):
 
     if endpoint is False:
         stop = stop - ((stop - start) / num)
-    if hasattr(start, "__len__") and hasattr(stop, "__len__"):
+    if hasattr(start, "__len__") or hasattr(stop, "__len__"):
         start = convert_to_tensor(start, dtype=dtype)
         stop = convert_to_tensor(stop, dtype=dtype)
         steps = torch.arange(num, dtype=dtype, device=get_device())
         steps = steps / builtins.max(num - 1, 1)
 
         # reshape `steps` to allow for broadcasting
-        for i in range(start.ndim):
+        for i in range(builtins.max(start.ndim, stop.ndim)):
             steps = steps.unsqueeze(-1)
 
         # increments from `start` to `stop` in each dimension
