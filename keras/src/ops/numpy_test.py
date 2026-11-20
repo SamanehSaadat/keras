@@ -13717,7 +13717,10 @@ class NumpyDtypeTest(testing.TestCase):
     reason="histogram op not implemented for torch on gpu",
 )
 class HistogramTest(testing.TestCase):
-    def test_histogram_default_args(self):
+    @parameterized.named_parameters(named_product(BACKEND_AGNOSTIC_OPS))
+    def test_histogram_default_args(self, backend_agnostic_ops):
+        backend.config._set_use_backend_agnostic_ops(backend_agnostic_ops)
+        self.addCleanup(backend.config._set_use_backend_agnostic_ops, False)
         hist_op = knp.histogram
         input_tensor = np.random.rand(8)
 
@@ -13737,7 +13740,10 @@ class HistogramTest(testing.TestCase):
         self.assertAllClose(counts, expected_counts)
         self.assertAllClose(edges, expected_edges)
 
-    def test_histogram_custom_bins(self):
+    @parameterized.named_parameters(named_product(BACKEND_AGNOSTIC_OPS))
+    def test_histogram_custom_bins(self, backend_agnostic_ops):
+        backend.config._set_use_backend_agnostic_ops(backend_agnostic_ops)
+        self.addCleanup(backend.config._set_use_backend_agnostic_ops, False)
         hist_op = knp.histogram
         input_tensor = np.random.rand(8)
         bins = 5
@@ -13752,7 +13758,10 @@ class HistogramTest(testing.TestCase):
         self.assertEqual(edges.shape, expected_edges.shape)
         self.assertAllClose(edges, expected_edges)
 
-    def test_histogram_custom_range(self):
+    @parameterized.named_parameters(named_product(BACKEND_AGNOSTIC_OPS))
+    def test_histogram_custom_range(self, backend_agnostic_ops):
+        backend.config._set_use_backend_agnostic_ops(backend_agnostic_ops)
+        self.addCleanup(backend.config._set_use_backend_agnostic_ops, False)
         hist_op = knp.histogram
         input_tensor = np.random.rand(10)
         range_specified = (2, 8)
@@ -13808,7 +13817,10 @@ class HistogramTest(testing.TestCase):
         ):
             hist_op(input_tensor, range=(5, 1))
 
-    def test_histogram_large_values(self):
+    @parameterized.named_parameters(named_product(BACKEND_AGNOSTIC_OPS))
+    def test_histogram_large_values(self, backend_agnostic_ops):
+        backend.config._set_use_backend_agnostic_ops(backend_agnostic_ops)
+        self.addCleanup(backend.config._set_use_backend_agnostic_ops, False)
         hist_op = knp.histogram
         input_tensor = np.array([1e10, 2e10, 3e10, 4e10, 5e10])
 
@@ -13819,7 +13831,10 @@ class HistogramTest(testing.TestCase):
         self.assertAllClose(counts, expected_counts)
         self.assertAllClose(edges, expected_edges)
 
-    def test_histogram_float_input(self):
+    @parameterized.named_parameters(named_product(BACKEND_AGNOSTIC_OPS))
+    def test_histogram_float_input(self, backend_agnostic_ops):
+        backend.config._set_use_backend_agnostic_ops(backend_agnostic_ops)
+        self.addCleanup(backend.config._set_use_backend_agnostic_ops, False)
         hist_op = knp.histogram
         input_tensor = np.random.rand(8)
 
@@ -13839,7 +13854,10 @@ class HistogramTest(testing.TestCase):
         ):
             hist_op(input_tensor)
 
-    def test_histogram_values_on_edges(self):
+    @parameterized.named_parameters(named_product(BACKEND_AGNOSTIC_OPS))
+    def test_histogram_values_on_edges(self, backend_agnostic_ops):
+        backend.config._set_use_backend_agnostic_ops(backend_agnostic_ops)
+        self.addCleanup(backend.config._set_use_backend_agnostic_ops, False)
         hist_op = knp.histogram
         input_tensor = np.array([0.0, 2.0, 4.0, 8.0, 10.0])
         bins = 5
@@ -13852,8 +13870,7 @@ class HistogramTest(testing.TestCase):
 
     # TODO: Fix predict for NumPy.
     @parameterized.named_parameters(
-        ("jit_compile_false", False),
-        ("jit_compile_true", True),
+        named_product(BACKEND_AGNOSTIC_OPS, jit_compile=[False, True])
     )
     @pytest.mark.skipif(
         backend.backend() == "numpy",
@@ -13862,7 +13879,10 @@ class HistogramTest(testing.TestCase):
             "not finite' on the NumPy backend. To be fixed."
         ),
     )
-    def test_histogram_predict(self, jit_compile):
+    def test_histogram_predict(self, backend_agnostic_ops, jit_compile):
+        backend.config._set_use_backend_agnostic_ops(backend_agnostic_ops)
+        self.addCleanup(backend.config._set_use_backend_agnostic_ops, False)
+
         class HistogramLayer(keras.layers.Layer):
             def call(self, x):
                 shape = ops.shape(x)
