@@ -3873,11 +3873,7 @@ def _gcd(x1, x2):
         )
         return (
             backend.ops.numpy.where(x2_is_zero, x1, x2),
-            backend.ops.numpy.where(
-                x2_is_zero,
-                backend.ops.numpy.zeros_like(x2),
-                backend.ops.numpy.mod(x1, x2_safe),
-            ),
+            backend.ops.numpy.mod(x1, x2_safe),
         )
 
     x1, _ = backend.ops.while_loop(cond, body, (x1, x2))
