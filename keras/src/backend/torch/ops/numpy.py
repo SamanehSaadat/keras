@@ -2064,7 +2064,12 @@ def sort(x, axis=-1):
 def split(x, indices_or_sections, axis=0):
     x = convert_to_tensor(x)
     dim = x.shape[axis]
-    if not isinstance(indices_or_sections, int):
+    if isinstance(indices_or_sections, (list, tuple)) and builtins.all(
+        isinstance(i, int) for i in indices_or_sections
+    ):
+        bounds = [0, *indices_or_sections, dim]
+        chunk_sizes = [end - start for start, end in zip(bounds, bounds[1:])]
+    elif not isinstance(indices_or_sections, int):
         indices_or_sections = convert_to_tensor(indices_or_sections)
         start_size = indices_or_sections[0:1]
         end_size = dim - indices_or_sections[-1:]

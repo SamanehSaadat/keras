@@ -2986,10 +2986,19 @@ def sort(x, axis=-1):
 
 
 def split(x, indices_or_sections, axis=0):
-    if not isinstance(indices_or_sections, int):
+    total_size = x.shape[axis]
+    if (
+        isinstance(total_size, int)
+        and isinstance(indices_or_sections, (list, tuple))
+        and builtins.all(isinstance(i, int) for i in indices_or_sections)
+    ):
+        bounds = [0, *indices_or_sections, total_size]
+        num_or_size_splits = [
+            end - start for start, end in zip(bounds, bounds[1:])
+        ]
+    elif not isinstance(indices_or_sections, int):
         # `tf.split` requires `num_or_size_splits`, so we need to convert
         # `indices_or_sections` to the appropriate format.
-        total_size = x.shape[axis]
         indices_or_sections = convert_to_tensor(indices_or_sections)
         start_size = indices_or_sections[0:1]
         end_size = total_size - indices_or_sections[-1:]
